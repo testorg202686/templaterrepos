@@ -10,56 +10,16 @@ jobs:
       matrix: ${{ steps.build.outputs.matrix }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # Validar que exista el archivo CSV
       - name: Validar CSV
         run: |
           [ -f repos.csv ] || { echo "❌ repos.csv no encontrado"; exit 1; }
 
-      # Debug opcional
-      - name: Debug CSV
-        run: |
-          echo "----- repos.csv -----"
-          cat repos.csv
-          echo "---------------------"
-
-      # 🔥 Parseo robusto con Python (sin problemas de indentación)
-      - name: Construir matriz con Python
+      - name: Construir matriz
         id: build
         run: |
-          python3 - <<'EOF' > matrix.json
-import csv
-import json
-
-rows = []
-
-with open("repos.csv", newline='', encoding='utf-8') as f:
-    reader = csv.DictReader(f)
-
-    for r in reader:
-        tipo = (r.get("type") or "").strip()
-
-        if tipo in ["source", "documentation"]:
-            types = [tipo]
-        elif tipo in ["source+documentation", "documentation+source"]:
-            types = ["source", "documentation"]
-        else:
-            raise Exception(f"Tipo inválido: {tipo}")
-
-        for t in types:
-            rows.append({
-                "mxapm": (r.get("mxapm") or "").strip(),
-                "name": (r.get("name") or "").strip(),
-                "description": (r.get("description") or "").strip(),
-                "type": t,
-                "template_source": (r.get("template_source") or "").strip(),
-                "template_docs": (r.get("template_docs") or "").strip()
-            })
-
-print(json.dumps(rows))
-EOF
+          python3 scripts/build_matrix.py > matrix.json
 
           echo "Matrix generada:"
           cat matrix.json
@@ -72,7 +32,6 @@ EOF
     runs-on: ubuntu-latest
 
     strategy:
-      fail-fast: false
       matrix:
         repo: ${{ fromJson(needs.prepare.outputs.matrix) }}
 
@@ -82,68 +41,31 @@ EOF
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           OWNER: your-org
         run: |
-          set -e
-
-          TYPE="${{ matrix.repo.type }}"
-          MXAPM="${{ matrix.repo.mxapm }}"
           NAME="${{ matrix.repo.name }}"
           DESC="${{ matrix.repo.description }}"
-          TEMPLATE_SOURCE="${{ matrix.repo.template_source }}"
-          TEMPLATE_DOCS="${{ matrix.repo.template_docs }}"
+          TEMPLATE="${{ matrix.repo.template }}"
 
-          # Normalizar nombre
-          CLEAN_NAME=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
+          echo "➡️ Creando: $NAME"
 
-          # Selección de template + naming
-          case "$TYPE" in
-            source)
-              TEMPLATE="$TEMPLATE_SOURCE"
-              FINAL_NAME="${MXAPM}-source-${CLEAN_NAME}"
-              ;;
-            documentation)
-              TEMPLATE="$TEMPLATE_DOCS"
-              FINAL_NAME="${MXAPM}-documentation-${CLEAN_NAME}"
-              ;;
-            *)
-              echo "❌ Tipo inválido: $TYPE"
-              exit 1
-              ;;
-          esac
-
-          # Validar template
-          if [ -z "$TEMPLATE" ]; then
-            echo "❌ No hay template definido para tipo: $TYPE"
-            exit 1
-          fi
-
-          echo "➡️ Creando: $FINAL_NAME usando template: $TEMPLATE"
-
-          # Verificar si ya existe
+          # Verificar si existe
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: token $ADMIN_TOKEN" \
-            https://api.github.com/repos/$OWNER/$FINAL_NAME)
+            https://api.github.com/repos/$OWNER/$NAME)
 
           if [ "$STATUS" = "200" ]; then
-            echo "⚠️ El repositorio ya existe, se omite"
+            echo "⚠️ Ya existe, se omite"
             exit 0
           fi
 
-          # Construir payload con jq
-          PAYLOAD=$(jq -n \
-            --arg owner "$OWNER" \
-            --arg name "$FINAL_NAME" \
-            --arg desc "$DESC" \
-            '{
-              owner: $owner,
-              name: $name,
-              description: $desc,
-              private: true
-            }')
-
-          # Crear repositorio desde template
+          # Crear repo
           curl -s -X POST "https://api.github.com/repos/$OWNER/$TEMPLATE/generate" \
             -H "Authorization: token $ADMIN_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            -d "$PAYLOAD"
+            -d "{
+              \"owner\": \"$OWNER\",
+              \"name\": \"$NAME\",
+              \"description\": \"$DESC\",
+              \"private\": true
+            }"
 
-          echo "✅ Repositorio creado: $FINAL_NAME"
+          echo "✅ Creado: $NAME"
