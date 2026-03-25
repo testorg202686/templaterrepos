@@ -18,61 +18,53 @@ jobs:
         run: |
           [ -f repos.csv ] || { echo "❌ repos.csv no encontrado"; exit 1; }
 
-      # (Opcional) Debug para ver el contenido del CSV
+      # Debug opcional
       - name: Debug CSV
         run: |
           echo "----- repos.csv -----"
           cat repos.csv
           echo "---------------------"
 
-      # Construir matrix usando jq (versión corregida)
-      - name: Construir matriz con jq
+      # 🔥 Parseo robusto con Python (sin problemas de indentación)
+      - name: Construir matriz con Python
         id: build
         run: |
-          MATRIX=$(jq -Rn '
-            # Leer encabezados
-            ( input | split(",") ) as $headers |
+          python3 - <<'EOF' > matrix.json
+import csv
+import json
 
-            [ inputs
-              | select(length > 0)
-              | split(",") as $row
+rows = []
 
-              # Validar columnas
-              | select($row | length == ($headers | length))
+with open("repos.csv", newline='', encoding='utf-8') as f:
+    reader = csv.DictReader(f)
 
-              # Construir objeto correctamente
-              | reduce range(0; $headers|length) as $i ({}; 
-                  . + { ($headers[$i]): $row[$i] }
-                )
+    for r in reader:
+        tipo = (r.get("type") or "").strip()
 
-              # Expandir tipos
-              | .types = (
-                  if .type == "source" then ["source"]
-                  elif .type == "documentation" then ["documentation"]
-                  elif (.type == "source+documentation" or .type == "documentation+source")
-                    then ["source","documentation"]
-                  else
-                    error("Tipo inválido: " + .type)
-                  end
-                )
+        if tipo in ["source", "documentation"]:
+            types = [tipo]
+        elif tipo in ["source+documentation", "documentation+source"]:
+            types = ["source", "documentation"]
+        else:
+            raise Exception(f"Tipo inválido: {tipo}")
 
-              # Expandir registros
-              | .types[]
-              | {
-                  mxapm: .mxapm,
-                  name: .name,
-                  description: .description,
-                  type: .,
-                  template_source: .template_source,
-                  template_docs: .template_docs
-                }
-            ]
-          ' repos.csv)
+        for t in types:
+            rows.append({
+                "mxapm": (r.get("mxapm") or "").strip(),
+                "name": (r.get("name") or "").strip(),
+                "description": (r.get("description") or "").strip(),
+                "type": t,
+                "template_source": (r.get("template_source") or "").strip(),
+                "template_docs": (r.get("template_docs") or "").strip()
+            })
+
+print(json.dumps(rows))
+EOF
 
           echo "Matrix generada:"
-          echo "$MATRIX"
+          cat matrix.json
 
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          echo "matrix=$(cat matrix.json)" >> $GITHUB_OUTPUT
 
 
   create:
@@ -102,7 +94,7 @@ jobs:
           # Normalizar nombre
           CLEAN_NAME=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
 
-          # Seleccionar template según tipo
+          # Selección de template + naming
           case "$TYPE" in
             source)
               TEMPLATE="$TEMPLATE_SOURCE"
@@ -119,7 +111,7 @@ jobs:
           esac
 
           # Validar template
-          if [ -z "$TEMPLATE" ] || [ "$TEMPLATE" = "null" ]; then
+          if [ -z "$TEMPLATE" ]; then
             echo "❌ No hay template definido para tipo: $TYPE"
             exit 1
           fi
@@ -148,7 +140,7 @@ jobs:
               private: true
             }')
 
-          # Crear repo desde template
+          # Crear repositorio desde template
           curl -s -X POST "https://api.github.com/repos/$OWNER/$TEMPLATE/generate" \
             -H "Authorization: token $ADMIN_TOKEN" \
             -H "Accept: application/vnd.github+json" \
