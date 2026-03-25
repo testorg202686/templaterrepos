@@ -1,0 +1,131 @@
+name: Repo Factory
+
+on:
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar CSV
+        run: |
+          [ -f repos.csv ] || { echo "❌ repos.csv no encontrado"; exit 1; }
+
+      - name: Construir matriz con jq
+        id: build
+        run: |
+          MATRIX=$(jq -Rn '
+            ( input | split(",") ) as $headers |
+            [ inputs
+              | select(length > 0)
+              | split(",")
+              | reduce range(0; $headers|length) as $i ({}; .[$headers[$i]] = .[$i])
+
+              # Expandir tipos
+              | .types = (
+                  if .type == "source" then ["source"]
+                  elif .type == "documentation" then ["documentation"]
+                  elif (.type == "source+documentation" or .type == "documentation+source")
+                    then ["source","documentation"]
+                  else
+                    error("Tipo inválido: " + .type)
+                  end
+                )
+
+              # Expandir registros
+              | .types[]
+              | {
+                  mxapm: .mxapm,
+                  name: .name,
+                  description: .description,
+                  type: .,
+                  template_source: .template_source,
+                  template_docs: .template_docs
+                }
+            ]
+          ' repos.csv)
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+
+  create:
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        repo: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Crear repositorio
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          OWNER: testorg202686
+        run: |
+          set -e
+
+          TYPE="${{ matrix.repo.type }}"
+          MXAPM="${{ matrix.repo.mxapm }}"
+          NAME="${{ matrix.repo.name }}"
+          DESC="${{ matrix.repo.description }}"
+          TEMPLATE_SOURCE="${{ matrix.repo.template_source }}"
+          TEMPLATE_DOCS="${{ matrix.repo.template_docs }}"
+
+          # Normalizar nombre
+          CLEAN_NAME=$(echo "$NAME" | tr '[:upper:]' '[:lower:]' | tr ' ' '-' | tr -cd 'a-z0-9-')
+
+          # Seleccionar template según tipo
+          case "$TYPE" in
+            source)
+              TEMPLATE="$TEMPLATE_SOURCE"
+              FINAL_NAME="${MXAPM}-source-${CLEAN_NAME}"
+              ;;
+            documentation)
+              TEMPLATE="$TEMPLATE_DOCS"
+              FINAL_NAME="${MXAPM}-documentation-${CLEAN_NAME}"
+              ;;
+          esac
+
+          # Validar que haya template definido
+          if [ -z "$TEMPLATE" ] || [ "$TEMPLATE" = "null" ]; then
+            echo "❌ No hay template definido para tipo: $TYPE"
+            exit 1
+          fi
+
+          echo "➡️ Creando: $FINAL_NAME usando template: $TEMPLATE"
+
+          # Verificar existencia
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token $ADMIN_TOKEN" \
+            https://api.github.com/repos/$OWNER/$FINAL_NAME)
+
+          if [ "$STATUS" = "200" ]; then
+            echo "⚠️ Ya existe, se omite"
+            exit 0
+          fi
+
+          # Payload con jq
+          PAYLOAD=$(jq -n \
+            --arg owner "$OWNER" \
+            --arg name "$FINAL_NAME" \
+            --arg desc "$DESC" \
+            '{
+              owner: $owner,
+              name: $name,
+              description: $desc,
+              private: true
+            }')
+
+          # Crear repo desde template correcto
+          curl -s -X POST "https://api.github.com/repos/$OWNER/$TEMPLATE/generate" \
+            -H "Authorization: token $ADMIN_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "$PAYLOAD"
+
+          echo "✅ Creado: $FINAL_NAME"
