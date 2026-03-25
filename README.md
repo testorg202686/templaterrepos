@@ -1,134 +1,119 @@
-# 📦 Repo Factory con GitHub Actions
+# 📦 Repo Factory (Create & Delete)
 
-Este proyecto implementa un **Repo Factory automatizado** usando GitHub Actions que permite crear repositorios a partir de templates basados en un archivo `repos.csv`.
-
----
-
-## 🚀 ¿Qué hace?
-
-- Lee un archivo `repos.csv`
-- Genera repositorios automáticamente en tu organización
-- Soporta múltiples tipos:
-  - `source`
-  - `documentation`
-  - `source+documentation`
-- Usa **templates distintos por tipo**
-- Aplica naming estándar automáticamente
+Automatiza la **creación y eliminación de repositorios** en GitHub a partir de un archivo `repos.csv`.
 
 ---
 
-## 📄 Estructura del CSV
+## 🚀 Workflows
 
-El archivo `repos.csv` define los repositorios a crear:
+### 1. Create Repos
+Crea repositorios desde templates definidos en el CSV.
+
+### 2. Delete Repos
+Elimina repositorios generados (con validación y modo seguro `dry_run`).
+
+---
+
+## 📄 Archivo de entrada
+
+`repos.csv`
 
 ```csv
 mxapm,name,description,type,template_source,template_docs
 ```
 
-### 🧩 Campos
+### Campos
 
-| Campo              | Descripción |
-|-------------------|------------|
-| `mxapm`           | Identificador del sistema/aplicación |
-| `name`            | Nombre base del repositorio |
-| `description`     | Descripción del repositorio |
-| `type`            | Tipo: `source`, `documentation`, `source+documentation` |
-| `template_source` | Template para repos tipo source |
-| `template_docs`   | Template para repos tipo documentation |
+- `mxapm`: Identificador
+- `name`: Nombre base
+- `description`: Descripción (opcional)
+- `type`: `source`, `documentation`, `source+documentation`
+- `template_source`: Template para source
+- `template_docs`: Template para documentation
 
 ---
 
 ## 🧪 Ejemplo
 
 ```csv
-mxapm,name,description,type,template_source,template_docs
-mxapm0004521,payments-gateway,Gateway de pagos,source+documentation,template-source-repo,template-docs-repo
+mxapm0004521,payments-gateway,Gateway pagos,source+documentation,template1-source,template2-documentation
 ```
 
 ---
 
-## 🎯 Resultado esperado
+## 🏗️ Naming
 
-Para el ejemplo anterior se crearán:
+- `source` → `{mxapm}-source-{name}`
+- `documentation` → `{mxapm}-documentation-{name}`
+
+---
+
+## ▶️ Uso
+
+### Crear repos
+1. Ir a **Actions**
+2. Ejecutar: `Repo Factory`
+3. Run workflow
+
+---
+
+### Eliminar repos
+
+1. Ir a **Actions**
+2. Ejecutar: `Repo Factory - Delete Repos`
+
+#### 🔍 Dry Run (recomendado)
+confirm = DELETE  
+dry_run = true  
+
+#### 🚨 Eliminación real
+confirm = DELETE  
+dry_run = false  
+
+---
+
+## 🔐 Requisitos
+
+- Secret: `ADMIN_TOKEN`
+- Permisos:
+  - `repo`
+  - `admin:org`
+
+---
+
+## 🛡️ Seguridad
+
+- Confirmación obligatoria (`DELETE`)
+- `dry_run` por defecto
+- Validación de existencia
+- Protección por prefijo (`mxapm`)
+
+---
+
+## 🧠 Notas
+
+- Soporta `source+documentation`
+- No duplica repos existentes
+- CSV compatible con Excel
+
+---
+
+## 📁 Estructura
 
 ```
-mxapm0004521-source-payments-gateway
-mxapm0004521-documentation-payments-gateway
+.github/workflows/
+  repo-factory.yml
+  repo-delete.yml
+scripts/
+  build_matrix.py
+repos.csv
 ```
 
 ---
 
-## 🏗️ Naming Convention
+## 🚀 Futuras mejoras
 
-| Tipo            | Formato |
-|-----------------|--------|
-| source          | {mxapm}-source-{name} |
-| documentation   | {mxapm}-documentation-{name} |
-
----
-
-## ⚙️ Requisitos
-
-### 1. Templates
-Debes tener repositorios marcados como **Template Repository**:
-
-- template-source-repo
-- template-docs-repo
-
-Configuración:
-- Ir a Settings → General
-- Activar: Template repository
-
----
-
-### 2. Token de acceso
-
-Configura un secret en GitHub:
-
-ADMIN_TOKEN
-
-Permisos requeridos:
-- repo
-- admin:org (para organizaciones)
-- workflow (opcional)
-
----
-
-## ▶️ Ejecución
-
-1. Ir a GitHub Actions
-2. Seleccionar workflow: Repo Factory
-3. Click en Run workflow
-
----
-
-## 🔄 Flujo interno
-
-1. Se lee repos.csv
-2. Se transforma a JSON usando jq
-3. Se expande source+documentation en múltiples entradas
-4. Se ejecuta un job por repositorio (matrix)
-5. Se crea el repo usando la API de GitHub
-
----
-
-## 🛡️ Validaciones incluidas
-
-- CSV no encontrado → falla
-- Tipo inválido → error
-- Repo ya existe → se omite
-- Template no definido → error
-
----
-
----
-
-## 💡 Notas
-
-- Los nombres se normalizan automáticamente:
-  - minúsculas
-  - espacios → -
-  - sin caracteres especiales
-- Compatible con ejecución masiva (decenas o cientos de repos)
-
----
+- 👥 Asignación de teams
+- 🔐 Environments automáticos
+- 🛡️ Branch protection
+- 📊 Auditoría / logs
