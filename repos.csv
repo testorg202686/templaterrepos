@@ -1,4 +1,7 @@
 mxapm,name,description,type,template_source,template_docs
-mxapm0002317,att-mediation,Servicio de mediación ATT,source,template-source-repo,
-mxapm0002317,att-mediation,Documentación ATT,documentation,,template-docs-repo
-mxapm0004521,payments-gateway,Gateway de pagos,source+documentation,template-source-repo,template-docs-repo
+mxapm0002317,att-mediation,Servicio ATT,source,template1-source,
+mxapm0002317,att-mediation,Docs ATT,documentation,,template2-documentation
+mxapm0004521,payments-gateway,Gateway pagos,source+documentation,template1-source,template2-documentation
+mxapm0007788,customer-profile,Perfil cliente,source,template1-source,
+mxapm0007788,customer-profile,Docs cliente,documentation,,template2-documentation
+mxapm0009900,notifications-engine,Notificaciones,source+documentation,template1-source,template2-documentation
