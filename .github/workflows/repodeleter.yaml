@@ -1,0 +1,99 @@
+name: Repo Factory - Delete Repos
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DELETE to confirm repository deletion"
+        required: true
+      dry_run:
+        description: "Run in dry mode (true/false)"
+        required: true
+        default: "true"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar CSV
+        run: |
+          [ -f repos.csv ] || { echo "❌ repos.csv no encontrado"; exit 1; }
+
+      - name: Construir matriz
+        id: build
+        run: |
+          python3 scripts/build_matrix.py > matrix.json
+
+          echo "Matrix generada:"
+          cat matrix.json
+
+          echo "matrix=$(cat matrix.json)" >> $GITHUB_OUTPUT
+
+
+  delete:
+    needs: prepare
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event.inputs.confirm == 'DELETE' }}
+
+    strategy:
+      matrix:
+        repo: ${{ fromJson(needs.prepare.outputs.matrix) }}
+
+    steps:
+      - name: Eliminar repositorio
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
+          OWNER: your-org
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          NAME="${{ matrix.repo.name }}"
+
+          echo "🗑️ Procesando: $NAME"
+          echo "🔎 DRY_RUN=$DRY_RUN"
+
+          # Validación de seguridad (opcional pero recomendada)
+          if [[ "$NAME" != mxapm* ]]; then
+            echo "❌ Repo fuera de alcance permitido"
+            exit 1
+          fi
+
+          # Verificar si existe
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token $ADMIN_TOKEN" \
+            https://api.github.com/repos/$OWNER/$NAME)
+
+          if [ "$STATUS" != "200" ]; then
+            echo "⚠️ No existe, se omite"
+            exit 0
+          fi
+
+          # 🧪 DRY RUN → solo muestra
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🧪 [DRY RUN] Se eliminaría: $NAME"
+            exit 0
+          fi
+
+          # 🗑️ Eliminación real
+          echo "🚨 Eliminando: $NAME"
+
+          curl -s -X DELETE "https://api.github.com/repos/$OWNER/$NAME" \
+            -H "Authorization: token $ADMIN_TOKEN" \
+            -H "Accept: application/vnd.github+json"
+
+          echo "✅ Eliminado: $NAME"
+
+
+  safety-check:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.confirm != 'DELETE' }}
+    steps:
+      - name: Abortar ejecución
+        run: |
+          echo "❌ Debes escribir exactamente 'DELETE' para ejecutar este workflow"
+          exit 1
