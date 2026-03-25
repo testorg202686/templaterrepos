@@ -1,0 +1,4 @@
+mxapm,name,description,type,template_source,template_docs
+mxapm0002317,att-mediation,Servicio de mediación ATT,source,template-source-repo,
+mxapm0002317,att-mediation,Documentación ATT,documentation,,template-docs-repo
+mxapm0004521,payments-gateway,Gateway de pagos,source+documentation,template-source-repo,template-docs-repo
