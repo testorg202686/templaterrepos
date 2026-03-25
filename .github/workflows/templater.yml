@@ -39,7 +39,7 @@ jobs:
       - name: Crear repositorio
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          OWNER: your-org
+          OWNER: testorg202686
         run: |
           NAME="${{ matrix.repo.name }}"
           DESC="${{ matrix.repo.description }}"
