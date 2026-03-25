@@ -1,4 +1,4 @@
-name: Repo Factory
+name: Repo Factory - Crear Repos
 
 on:
   workflow_dispatch:
