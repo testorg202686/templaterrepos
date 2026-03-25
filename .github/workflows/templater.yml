@@ -10,21 +10,40 @@ jobs:
       matrix: ${{ steps.build.outputs.matrix }}
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      # Validar que exista el archivo CSV
       - name: Validar CSV
         run: |
           [ -f repos.csv ] || { echo "❌ repos.csv no encontrado"; exit 1; }
 
+      # (Opcional) Debug para ver el contenido del CSV
+      - name: Debug CSV
+        run: |
+          echo "----- repos.csv -----"
+          cat repos.csv
+          echo "---------------------"
+
+      # Construir matrix usando jq (versión corregida)
       - name: Construir matriz con jq
         id: build
         run: |
           MATRIX=$(jq -Rn '
+            # Leer encabezados
             ( input | split(",") ) as $headers |
+
             [ inputs
               | select(length > 0)
-              | split(",")
-              | reduce range(0; $headers|length) as $i ({}; .[$headers[$i]] = .[$i])
+              | split(",") as $row
+
+              # Validar columnas
+              | select($row | length == ($headers | length))
+
+              # Construir objeto correctamente
+              | reduce range(0; $headers|length) as $i ({}; 
+                  . + { ($headers[$i]): $row[$i] }
+                )
 
               # Expandir tipos
               | .types = (
@@ -50,6 +69,9 @@ jobs:
             ]
           ' repos.csv)
 
+          echo "Matrix generada:"
+          echo "$MATRIX"
+
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
 
@@ -66,7 +88,7 @@ jobs:
       - name: Crear repositorio
         env:
           ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
-          OWNER: testorg202686
+          OWNER: your-org
         run: |
           set -e
 
@@ -90,9 +112,13 @@ jobs:
               TEMPLATE="$TEMPLATE_DOCS"
               FINAL_NAME="${MXAPM}-documentation-${CLEAN_NAME}"
               ;;
+            *)
+              echo "❌ Tipo inválido: $TYPE"
+              exit 1
+              ;;
           esac
 
-          # Validar que haya template definido
+          # Validar template
           if [ -z "$TEMPLATE" ] || [ "$TEMPLATE" = "null" ]; then
             echo "❌ No hay template definido para tipo: $TYPE"
             exit 1
@@ -100,17 +126,17 @@ jobs:
 
           echo "➡️ Creando: $FINAL_NAME usando template: $TEMPLATE"
 
-          # Verificar existencia
+          # Verificar si ya existe
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: token $ADMIN_TOKEN" \
             https://api.github.com/repos/$OWNER/$FINAL_NAME)
 
           if [ "$STATUS" = "200" ]; then
-            echo "⚠️ Ya existe, se omite"
+            echo "⚠️ El repositorio ya existe, se omite"
             exit 0
           fi
 
-          # Payload con jq
+          # Construir payload con jq
           PAYLOAD=$(jq -n \
             --arg owner "$OWNER" \
             --arg name "$FINAL_NAME" \
@@ -122,10 +148,10 @@ jobs:
               private: true
             }')
 
-          # Crear repo desde template correcto
+          # Crear repo desde template
           curl -s -X POST "https://api.github.com/repos/$OWNER/$TEMPLATE/generate" \
             -H "Authorization: token $ADMIN_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             -d "$PAYLOAD"
 
-          echo "✅ Creado: $FINAL_NAME"
+          echo "✅ Repositorio creado: $FINAL_NAME"
