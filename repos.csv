@@ -1,2 +1,3 @@
 mxapm,name,description,type,template_source,template_docs
 mxapm0009900,notifications-engine,Notificaciones,source+documentation,template1-source,template2-documentation
+mxapm00010000,notifications-engine,Notificaciones,source,template1-source,
