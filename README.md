@@ -111,9 +111,3 @@ repos.csv
 
 ---
 
-## 🚀 Futuras mejoras
-
-- 👥 Asignación de teams
-- 🔐 Environments automáticos
-- 🛡️ Branch protection
-- 📊 Auditoría / logs
