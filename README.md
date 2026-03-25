@@ -109,5 +109,13 @@ scripts/
 repos.csv
 ```
 
+
+## 📁 Al cambio de organizacion
+
+```
+cambiar ADMIN_TOKEN
+cambiar OWNER: testorg202686
+```
+
 ---
 
