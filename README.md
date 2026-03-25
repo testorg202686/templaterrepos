@@ -115,6 +115,11 @@ repos.csv
 ```
 cambiar ADMIN_TOKEN
 cambiar OWNER: testorg202686
+
+Template repository Option tiene que estar checado en los settings de los repos templates
+"Template repositories let users generate new repositories with the same directory structure and files."
+https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template
+
 ```
 
 ---
